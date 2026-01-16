@@ -1,0 +1,99 @@
+body {
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: #f5f6f8;
+  color: #111;
+  margin: 0;
+  padding: 12px;
+  width: 360px;
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.label {
+  font-weight: 600;
+  font-size: 12px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: 1px solid #ccc;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn.primary {
+  background: #0b57d0;
+  color: #fff;
+  border-color: #0b57d0;
+}
+
+.btn.small {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.muted {
+  font-size: 12px;
+  color: #666;
+}
+
+progress {
+  width: 100%;
+  height: 10px;
+}
+
+pre {
+  background: #111;
+  color: #e6e6e6;
+  padding: 8px;
+  border-radius: 6px;
+  height: 120px;
+  overflow: auto;
+  font-size: 11px;
+}
+
+.warn {
+  background: #fff4cc;
+  border: 1px solid #f0d66a;
+  color: #5a4d00;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.hidden {
+  display: none;
+}

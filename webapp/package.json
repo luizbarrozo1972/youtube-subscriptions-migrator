@@ -1,0 +1,25 @@
+{
+    "name": "webapp",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "prisma": "prisma",
+        "dev": "node src/server.js",
+        "start": "node src/server.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "@prisma/client": "^6.5.0",
+        "csv-parse": "^6.1.0",
+        "express": "^5.2.1",
+        "googleapis": "^170.1.0",
+        "multer": "^2.0.2"
+    },
+    "devDependencies": {
+        "prisma": "^6.5.0"
+    }
+}

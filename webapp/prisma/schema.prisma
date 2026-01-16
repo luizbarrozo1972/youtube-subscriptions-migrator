@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ChannelStatus {
+  PENDING
+  SUCCESS
+  ERROR
+  SKIPPED
+}
+
+model ImportRun {
+  id         String        @id @default(cuid())
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  status     ImportStatus  @default(PENDING)
+  total      Int           @default(0)
+  processed  Int           @default(0)
+  success    Int           @default(0)
+  error      Int           @default(0)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  entries    ChannelEntry[]
+}
+
+model ChannelEntry {
+  id           String        @id @default(cuid())
+  runId        String
+  run          ImportRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  channelId    String
+  channelUrl   String?
+  channelTitle String?
+  status       ChannelStatus @default(PENDING)
+  errorMessage String?
+  attempts     Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([runId, channelId])
+  @@index([status])
+}
+
+model OAuthToken {
+  id           String   @id @default("default")
+  accessToken  String?
+  refreshToken String?
+  scope        String?
+  tokenType    String?
+  expiry       DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

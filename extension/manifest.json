@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Subscriptions Importer",
+  "version": "0.1.0",
+  "description": "Importa inscricoes de canais do YouTube via CSV usando a API.",
+  "permissions": ["identity", "storage"],
+  "host_permissions": ["https://www.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/youtube"]
+  },
+  "action": {
+    "default_title": "YT Importer",
+    "default_popup": "popup.html"
+  }
+}

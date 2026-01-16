@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Generated files
+webapp/generated/
+
+# Logs
+*.log
+webapp/server.log
+webapp/oauth.log
+
+# Database
+*.db
+*.sqlite
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Prisma generated
+prisma/migrations/*/migration.sql
+
+# Screenshots (optional - comentado para incluir no repo)
+# *.png
+# *.jpg

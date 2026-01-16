@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YT Importer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>YouTube Subscriptions Importer</h1>
+      <p class="muted">Importe inscricoes a partir de um CSV.</p>
+
+      <div class="card">
+        <label class="label" for="csvFile">Arquivo CSV</label>
+        <input id="csvFile" type="file" accept=".csv" />
+        <div class="row">
+          <button id="loadBtn" class="btn">Carregar CSV</button>
+          <span id="fileInfo" class="muted">Nenhum arquivo carregado</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="label" for="delay">Atraso entre inscricoes (segundos)</label>
+        <input id="delay" type="number" min="2" step="1" value="8" />
+        <div class="row">
+          <button id="startBtn" class="btn primary" disabled>Iniciar</button>
+          <button id="pauseBtn" class="btn" disabled>Pausar</button>
+        </div>
+        <div class="row">
+          <span id="progress" class="muted">0 / 0</span>
+          <span id="status" class="muted">Aguardando</span>
+        </div>
+        <progress id="progressBar" value="0" max="0"></progress>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <span class="label">Log</span>
+          <button id="clearLogBtn" class="btn small">Limpar</button>
+        </div>
+        <pre id="log"></pre>
+      </div>
+
+      <div id="clientWarning" class="warn hidden">
+        Edite o client_id no manifest.json antes de iniciar.
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

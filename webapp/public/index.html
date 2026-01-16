@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YouTube Subscriptions Migrator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>YouTube Subscriptions Migrator</h1>
+        <p>Import subscriptions from CSV using the YouTube Data API.</p>
+      </header>
+
+      <section class="card">
+        <h2>Step 1 - Authenticate</h2>
+        <div class="row">
+          <span id="authStatus" class="badge">Checking...</span>
+          <a id="authBtn" class="btn primary" href="/auth">Connect Google Account</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Step 2 - Upload CSV</h2>
+        <input id="csvFile" type="file" accept=".csv" />
+        <button id="uploadBtn" class="btn">Create Import</button>
+        <div id="runInfo" class="muted">No import yet.</div>
+      </section>
+
+      <section class="card">
+        <h2>Step 3 - Run</h2>
+        <label for="delay">Delay between subscriptions (seconds)</label>
+        <input id="delay" type="number" min="2" step="1" value="8" />
+        <div class="row">
+          <button id="startBtn" class="btn primary" disabled>Start</button>
+          <button id="pauseBtn" class="btn" disabled>Pause</button>
+        </div>
+        <div class="progress">
+          <span id="progressText" class="muted">0 / 0</span>
+          <progress id="progressBar" value="0" max="0"></progress>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Recent results</h2>
+        <pre id="log"></pre>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
