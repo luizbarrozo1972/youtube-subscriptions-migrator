@@ -28,14 +28,14 @@ enum ChannelStatus {
 }
 
 model ImportRun {
-  id         String        @id @default(cuid())
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  status     ImportStatus  @default(PENDING)
-  total      Int           @default(0)
-  processed  Int           @default(0)
-  success    Int           @default(0)
-  error      Int           @default(0)
+  id         String         @id @default(cuid())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  status     ImportStatus   @default(PENDING)
+  total      Int            @default(0)
+  processed  Int            @default(0)
+  success    Int            @default(0)
+  error      Int            @default(0)
   startedAt  DateTime?
   finishedAt DateTime?
   entries    ChannelEntry[]
@@ -50,21 +50,24 @@ model ChannelEntry {
   channelTitle String?
   status       ChannelStatus @default(PENDING)
   errorMessage String?
+  errorType    String? // 'QUOTA', 'AUTH', 'NETWORK', 'PERMANENT', etc.
+  lastErrorAt  DateTime? // Timestamp do último erro para verificar se quota resetou
   attempts     Int           @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@unique([runId, channelId])
   @@index([status])
+  @@index([errorType, status])
 }
 
 model OAuthToken {
-  id           String   @id @default("default")
+  id           String    @id @default("default")
   accessToken  String?
   refreshToken String?
   scope        String?
   tokenType    String?
   expiry       DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

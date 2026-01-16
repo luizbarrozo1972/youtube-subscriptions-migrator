@@ -1,50 +1,214 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>YouTube Subscriptions Migrator</title>
+    <title>YouTube Subscriptions Migrator - Dashboard</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>YouTube Subscriptions Migrator</h1>
-        <p>Import subscriptions from CSV using the YouTube Data API.</p>
+        <h1>📺 YouTube Subscriptions Migrator</h1>
+        <p>Importe inscrições do YouTube via CSV usando a YouTube Data API</p>
       </header>
 
-      <section class="card">
-        <h2>Step 1 - Authenticate</h2>
-        <div class="row">
-          <span id="authStatus" class="badge">Checking...</span>
-          <a id="authBtn" class="btn primary" href="/auth">Connect Google Account</a>
+      <!-- Stats Dashboard -->
+      <section id="statsDashboard" class="dashboard-grid" style="display: none;">
+        <div class="stat-card success">
+          <div class="stat-icon">✓</div>
+          <div class="stat-content">
+            <div class="stat-label">Sucessos</div>
+            <div class="stat-value" id="statSuccess">0</div>
+            <div class="stat-detail" id="statSuccessPercent">0%</div>
+          </div>
+        </div>
+        
+        <div class="stat-card error">
+          <div class="stat-icon">✗</div>
+          <div class="stat-content">
+            <div class="stat-label">Erros</div>
+            <div class="stat-value" id="statError">0</div>
+            <div class="stat-detail" id="statErrorPercent">0%</div>
+          </div>
+        </div>
+
+        <div class="stat-card pending">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-content">
+            <div class="stat-label">Pendentes</div>
+            <div class="stat-value" id="statPending">0</div>
+            <div class="stat-detail" id="statPendingPercent">0%</div>
+          </div>
+        </div>
+
+        <div class="stat-card quota">
+          <div class="stat-icon">📊</div>
+          <div class="stat-content">
+            <div class="stat-label">Quota Usada</div>
+            <div class="stat-value" id="statQuota">0</div>
+            <div class="stat-detail" id="statQuotaDetail">0 / 10.000</div>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <h2>Step 2 - Upload CSV</h2>
-        <input id="csvFile" type="file" accept=".csv" />
-        <button id="uploadBtn" class="btn">Create Import</button>
-        <div id="runInfo" class="muted">No import yet.</div>
+      <!-- Error Types Breakdown -->
+      <section id="errorBreakdown" class="card" style="display: none;">
+        <h2>📋 Detalhamento de Erros</h2>
+        <div class="error-types-grid">
+          <div class="error-type-card quota-error">
+            <div class="error-type-header">
+              <span class="error-type-icon">⚠️</span>
+              <span class="error-type-label">Quota Excedida</span>
+            </div>
+            <div class="error-type-count" id="errorCountQuota">0</div>
+            <button class="btn-small" id="retryQuotaBtn" disabled>Retry Automático</button>
+          </div>
+
+          <div class="error-type-card network-error">
+            <div class="error-type-header">
+              <span class="error-type-icon">🌐</span>
+              <span class="error-type-label">Erros de Rede</span>
+            </div>
+            <div class="error-type-count" id="errorCountNetwork">0</div>
+            <div class="error-type-note">Retry automático</div>
+          </div>
+
+          <div class="error-type-card auth-error">
+            <div class="error-type-header">
+              <span class="error-type-icon">🔐</span>
+              <span class="error-type-label">Erros de Auth</span>
+            </div>
+            <div class="error-type-count" id="errorCountAuth">0</div>
+            <div class="error-type-note">Retry automático</div>
+          </div>
+
+          <div class="error-type-card permanent-error">
+            <div class="error-type-header">
+              <span class="error-type-icon">❌</span>
+              <span class="error-type-label">Erros Permanentes</span>
+            </div>
+            <div class="error-type-count" id="errorCountPermanent">0</div>
+            <div class="error-type-note">Não retry</div>
+          </div>
+        </div>
       </section>
 
+      <!-- Progress Section -->
       <section class="card">
-        <h2>Step 3 - Run</h2>
-        <label for="delay">Delay between subscriptions (seconds)</label>
-        <input id="delay" type="number" min="2" step="1" value="8" />
-        <div class="row">
-          <button id="startBtn" class="btn primary" disabled>Start</button>
-          <button id="pauseBtn" class="btn" disabled>Pause</button>
-        </div>
-        <div class="progress">
-          <span id="progressText" class="muted">0 / 0</span>
-          <progress id="progressBar" value="0" max="0"></progress>
+        <h2>📊 Progresso da Importação</h2>
+        <div class="progress-container">
+          <div class="progress-info">
+            <span id="progressText" class="progress-label">0 / 0</span>
+            <span id="progressPercent" class="progress-percent">0%</span>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar" id="progressBar">
+              <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="progress-details">
+            <span class="status-badge" id="statusBadge">PENDENTE</span>
+            <span id="runInfo" class="muted">Nenhuma importação iniciada</span>
+          </div>
         </div>
       </section>
 
+      <!-- Main Actions -->
       <section class="card">
-        <h2>Recent results</h2>
-        <pre id="log"></pre>
+        <h2>⚙️ Configuração</h2>
+        <div class="form-group">
+          <label for="authStatus">Autenticação</label>
+          <div class="row">
+            <span id="authStatus" class="badge">Verificando...</span>
+            <a id="authBtn" class="btn primary" href="/auth">Conectar Conta Google</a>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="csvFile">Upload CSV</label>
+          <input id="csvFile" type="file" accept=".csv" />
+          <button id="uploadBtn" class="btn">Criar Importação</button>
+          <div id="uploadStatus" class="muted"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="delay">Intervalo entre inscrições (segundos)</label>
+          <input id="delay" type="number" min="2" step="1" value="8" />
+          <div class="row" style="margin-top: 10px;">
+            <button id="startBtn" class="btn primary" disabled>▶ Iniciar</button>
+            <button id="pauseBtn" class="btn" disabled>⏸ Pausar</button>
+            <button id="autoResumeBtn" class="btn" disabled style="display: none;">🔄 Retomar Automático</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tabs for Different Views -->
+      <section class="card">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="all">Todos</button>
+          <button class="tab-btn" data-tab="success">Sucessos</button>
+          <button class="tab-btn" data-tab="errors">Erros</button>
+          <button class="tab-btn" data-tab="quota">Quota</button>
+          <button class="tab-btn" data-tab="pending">Pendentes</button>
+        </div>
+
+        <div class="tab-content active" id="tab-all">
+          <div class="log-container" id="logAll"></div>
+        </div>
+
+        <div class="tab-content" id="tab-success">
+          <div class="log-container" id="logSuccess"></div>
+        </div>
+
+        <div class="tab-content" id="tab-errors">
+          <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all-errors">Todos Erros</button>
+            <button class="filter-btn" data-filter="quota">Quota</button>
+            <button class="filter-btn" data-filter="network">Rede</button>
+            <button class="filter-btn" data-filter="auth">Auth</button>
+            <button class="filter-btn" data-filter="permanent">Permanentes</button>
+          </div>
+          <div class="log-container" id="logErrors"></div>
+        </div>
+
+        <div class="tab-content" id="tab-quota">
+          <div class="quota-info-card">
+            <h3>Informações de Quota</h3>
+            <div class="quota-details">
+              <div class="quota-item">
+                <span class="quota-label">Unidades usadas:</span>
+                <span class="quota-value" id="quotaUsed">0</span>
+              </div>
+              <div class="quota-item">
+                <span class="quota-label">Unidades restantes:</span>
+                <span class="quota-value" id="quotaRemaining">10.000</span>
+              </div>
+              <div class="quota-item">
+                <span class="quota-label">Limite diário:</span>
+                <span class="quota-value">10.000 unidades</span>
+              </div>
+              <div class="quota-item">
+                <span class="quota-label">Custo por inscrição:</span>
+                <span class="quota-value">50 unidades</span>
+              </div>
+            </div>
+            <div class="quota-progress">
+              <div class="quota-bar" id="quotaBar">
+                <div class="quota-fill" id="quotaFill" style="width: 0%"></div>
+              </div>
+              <div class="quota-warning" id="quotaWarning" style="display: none;">
+                ⚠️ Quota diária excedida. O processamento será retomado automaticamente à meia-noite PST (04:00 BRT).
+              </div>
+            </div>
+            <button id="retryQuotaManualBtn" class="btn primary" disabled>Retry Erros de Quota</button>
+          </div>
+          <div class="log-container" id="logQuota"></div>
+        </div>
+
+        <div class="tab-content" id="tab-pending">
+          <div class="log-container" id="logPending"></div>
+        </div>
       </section>
     </div>
 

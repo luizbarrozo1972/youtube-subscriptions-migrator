@@ -152,18 +152,142 @@ async function markRunComplete(runId) {
   });
 }
 
+function classifyError(err) {
+  const status = err?.response?.status;
+  const errorMsg = err?.message ? String(err.message).toLowerCase() : '';
+  const errorCode = err?.code;
+
+  // Quota excedida
+  if (status === 403 || status === 429 || 
+      errorMsg.includes('quota') || 
+      errorMsg.includes('exceeded') ||
+      errorCode === 403 || errorCode === 429) {
+    return { type: 'QUOTA', retryable: true };
+  }
+
+  // Erro de autenticação (pode ser retentado após refresh)
+  if (status === 401 || errorCode === 401) {
+    return { type: 'AUTH', retryable: true };
+  }
+
+  // Erros de rede (retryable)
+  if (errorCode === 'ECONNRESET' || errorCode === 'ETIMEDOUT' || 
+      errorCode === 'ENOTFOUND' || errorMsg.includes('network') ||
+      errorMsg.includes('timeout')) {
+    return { type: 'NETWORK', retryable: true };
+  }
+
+  // Erros permanentes (não retryable)
+  if (status === 400 || status === 404 || status >= 500) {
+    return { type: 'PERMANENT', retryable: false };
+  }
+
+  // Default: não retryable
+  return { type: 'UNKNOWN', retryable: false };
+}
+
+async function resetQuotaErrors(runId) {
+  // Resetar erros de quota para PENDING se a quota provavelmente resetou
+  // Considera que a quota resetou se passou mais de 4 horas desde o último erro
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+
+  const result = await prisma.channelEntry.updateMany({
+    where: {
+      runId,
+      status: 'ERROR',
+      errorType: 'QUOTA',
+      lastErrorAt: {
+        lt: fourHoursAgo,
+      },
+    },
+    data: {
+      status: 'PENDING',
+      errorType: null,
+      lastErrorAt: null,
+    },
+  });
+
+  if (result.count > 0) {
+    console.log(`[${runId}] Resetados ${result.count} erros de quota para retry`);
+  }
+
+  return result.count;
+}
+
+async function checkAndResumeQuotaErrors(runId) {
+  const run = await prisma.importRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== 'RUNNING') return false;
+
+  // Contar sucessos recentes (última hora) para estimar se quota resetou
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentSuccesses = await prisma.channelEntry.count({
+    where: {
+      runId,
+      status: 'SUCCESS',
+      updatedAt: { gte: oneHourAgo },
+    },
+  });
+
+  // Se há sucessos recentes, a quota provavelmente resetou
+  if (recentSuccesses > 0) {
+    const resetCount = await resetQuotaErrors(runId);
+    if (resetCount > 0) {
+      const worker = workers.get(runId);
+      if (worker && worker.paused) {
+        worker.paused = false;
+        console.log(`[${runId}] Processamento retomado automaticamente após reset de quota`);
+        processNext(runId);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 async function processNext(runId) {
   const worker = workers.get(runId);
-  if (!worker || worker.paused) return;
+  if (!worker) return;
 
+  // Se pausado, verificar se quota resetou antes de continuar
+  if (worker.paused) {
+    await checkAndResumeQuotaErrors(runId);
+    return;
+  }
+
+  // Verificar e resetar erros de quota periodicamente (a cada 10 tentativas)
+  if (!worker.quotaCheckCounter || worker.quotaCheckCounter % 10 === 0) {
+    await checkAndResumeQuotaErrors(runId);
+  }
+  worker.quotaCheckCounter = (worker.quotaCheckCounter || 0) + 1;
+
+  // Buscar próximo canal PENDING (inclui os resetados de quota)
   const entry = await prisma.channelEntry.findFirst({
     where: { runId, status: 'PENDING' },
     orderBy: { createdAt: 'asc' },
   });
 
   if (!entry) {
-    await markRunComplete(runId);
-    workers.delete(runId);
+    // Verificar se há erros retryáveis antes de finalizar
+    const retryableErrors = await prisma.channelEntry.findFirst({
+      where: { 
+        runId, 
+        status: 'ERROR',
+        errorType: { in: ['QUOTA', 'NETWORK', 'AUTH'] },
+      },
+    });
+
+    if (!retryableErrors) {
+      await markRunComplete(runId);
+      // Limpar timers antes de deletar worker
+      if (worker.timer) clearTimeout(worker.timer);
+      if (worker.quotaCheckTimer) clearInterval(worker.quotaCheckTimer);
+      workers.delete(runId);
+    } else {
+      // Aguardar antes de tentar novamente
+      const delayMs = worker.delayMs || 8000;
+      worker.timer = setTimeout(() => processNext(runId), delayMs * 5);
+    }
     return;
   }
 
@@ -172,7 +296,13 @@ async function processNext(runId) {
     await prisma.$transaction([
       prisma.channelEntry.update({
         where: { id: entry.id },
-        data: { status: 'SUCCESS', attempts: { increment: 1 }, errorMessage: null },
+        data: { 
+          status: 'SUCCESS', 
+          attempts: { increment: 1 }, 
+          errorMessage: null,
+          errorType: null,
+          lastErrorAt: null,
+        },
       }),
       prisma.importRun.update({
         where: { id: runId },
@@ -183,13 +313,18 @@ async function processNext(runId) {
       }),
     ]);
   } catch (err) {
+    const errorClassification = classifyError(err);
+    const errorMsg = err?.message ? String(err.message) : '';
+
     await prisma.$transaction([
       prisma.channelEntry.update({
         where: { id: entry.id },
         data: {
           status: 'ERROR',
           attempts: { increment: 1 },
-          errorMessage: err?.message ? String(err.message).slice(0, 1000) : 'Unknown error',
+          errorMessage: errorMsg.slice(0, 1000),
+          errorType: errorClassification.type,
+          lastErrorAt: new Date(),
         },
       }),
       prisma.importRun.update({
@@ -200,6 +335,21 @@ async function processNext(runId) {
         },
       }),
     ]);
+
+    // Se quota excedida, pausar automaticamente
+    if (errorClassification.type === 'QUOTA' && worker) {
+      worker.paused = true;
+      console.log(`[${runId}] Quota excedida detectada. Processamento pausado automaticamente.`);
+      console.log(`[${runId}] Retomará automaticamente quando a quota resetar (meia-noite PST / 04:00 BRT).`);
+      // Agendar verificação periódica para retomar quando quota resetar
+      worker.quotaCheckTimer = setInterval(async () => {
+        const resumed = await checkAndResumeQuotaErrors(runId);
+        if (resumed && worker.quotaCheckTimer) {
+          clearInterval(worker.quotaCheckTimer);
+          worker.quotaCheckTimer = null;
+        }
+      }, 30 * 60 * 1000); // Verificar a cada 30 minutos
+    }
   }
 
   const delayMs = worker.delayMs || 8000;
@@ -327,12 +477,20 @@ app.post('/api/imports/:id/start', async (req, res) => {
 
   let worker = workers.get(runId);
   if (!worker) {
-    worker = { paused: false, delayMs, timer: null };
+    worker = { paused: false, delayMs, timer: null, quotaCheckCounter: 0, quotaCheckTimer: null };
     workers.set(runId, worker);
   } else {
     worker.paused = false;
     worker.delayMs = delayMs;
+    // Limpar timer de verificação de quota se existir
+    if (worker.quotaCheckTimer) {
+      clearInterval(worker.quotaCheckTimer);
+      worker.quotaCheckTimer = null;
+    }
   }
+
+  // Resetar erros de quota antes de iniciar
+  await resetQuotaErrors(runId);
 
   processNext(runId);
   res.json({ ok: true });
@@ -359,12 +517,100 @@ app.get('/api/imports/:id', async (req, res) => {
     res.status(404).json({ error: 'Run not found.' });
     return;
   }
+  
+  // Get recent entries (last 50 for better visibility)
   const recent = await prisma.channelEntry.findMany({
     where: { runId, status: { not: 'PENDING' } },
     orderBy: { updatedAt: 'desc' },
-    take: 20,
+    take: 50,
   });
-  res.json({ run, recent });
+
+  // Estatísticas de retry
+  const quotaErrors = await prisma.channelEntry.count({
+    where: { runId, status: 'ERROR', errorType: 'QUOTA' },
+  });
+  const networkErrors = await prisma.channelEntry.count({
+    where: { runId, status: 'ERROR', errorType: 'NETWORK' },
+  });
+  const authErrors = await prisma.channelEntry.count({
+    where: { runId, status: 'ERROR', errorType: 'AUTH' },
+  });
+  const permanentErrors = await prisma.channelEntry.count({
+    where: { 
+      runId, 
+      status: 'ERROR',
+      errorType: { notIn: ['QUOTA', 'NETWORK', 'AUTH'] },
+    },
+  });
+  const pendingCount = await prisma.channelEntry.count({
+    where: { runId, status: 'PENDING' },
+  });
+
+  // Get entries by type for detailed views
+  const successEntries = await prisma.channelEntry.findMany({
+    where: { runId, status: 'SUCCESS' },
+    orderBy: { updatedAt: 'desc' },
+    take: 100,
+  });
+  const errorEntries = await prisma.channelEntry.findMany({
+    where: { runId, status: 'ERROR' },
+    orderBy: { updatedAt: 'desc' },
+    take: 100,
+  });
+  const quotaEntries = await prisma.channelEntry.findMany({
+    where: { runId, status: 'ERROR', errorType: 'QUOTA' },
+    orderBy: { updatedAt: 'desc' },
+    take: 100,
+  });
+  const pendingEntries = await prisma.channelEntry.findMany({
+    where: { runId, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    take: 100,
+  });
+
+  const worker = workers.get(runId);
+  res.json({ 
+    run, 
+    recent,
+    entries: {
+      success: successEntries,
+      error: errorEntries,
+      quota: quotaEntries,
+      pending: pendingEntries,
+    },
+    retry: {
+      quotaErrors,
+      networkErrors,
+      authErrors,
+      permanentErrors,
+      pendingCount,
+      paused: worker?.paused || false,
+    },
+  });
+});
+
+app.post('/api/imports/:id/retry-quota-errors', async (req, res) => {
+  const runId = req.params.id;
+  const resetCount = await resetQuotaErrors(runId);
+  
+  // Tentar retomar processamento se estava pausado
+  const worker = workers.get(runId);
+  if (worker && worker.paused && resetCount > 0) {
+    worker.paused = false;
+    if (worker.quotaCheckTimer) {
+      clearInterval(worker.quotaCheckTimer);
+      worker.quotaCheckTimer = null;
+    }
+    processNext(runId);
+  }
+
+  res.json({ reset: resetCount, resumed: Boolean(worker && worker.paused === false) });
+});
+
+app.post('/api/imports/:id/auto-resume', async (req, res) => {
+  const runId = req.params.id;
+  const resumed = await checkAndResumeQuotaErrors(runId);
+  res.json({ resumed });
 });
 
 app.listen(3000, () => {
