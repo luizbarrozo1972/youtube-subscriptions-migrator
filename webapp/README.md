@@ -6,7 +6,7 @@
 - Google Cloud project with YouTube Data API enabled
 
 ## Environment
-Edit `.env`:
+Create `.env` (copy from `env.example`) and edit it:
 - `DATABASE_URL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
